@@ -1,0 +1,67 @@
+<!doctype html> <html>
+<head>
+<title>AstroDodge!</title>
+<script>
+	var shipX = 250;
+	var shipY = 450;	
+
+	var c;
+	
+	window.addEventListener("load", eventWindowLoaded, false);
+
+	function rungame() {
+		drawBackground();
+		drawShip();
+	};
+
+
+	function eventWindowLoaded () {
+		console.log("test1");	
+		canvasApp();
+	};	
+
+	function canvasApp() {	
+		var canvas = document = document.getElementById('myCanvas');
+		c = canvas.getContext("2d");
+		setInterval(rungame,25);
+	};
+	
+	function drawBackground() {
+		c.fillStyle = "#0A0A2A";
+		c.fillRect(0,0,500,500);
+	};
+	
+	document.onkeydown = function(e) {
+		console.log(e.keyCode);
+		if (e.keyCode === 39) {
+			shipX = shipX+5;
+		}
+		if (e.keyCode === 37) {
+			shipX = shipX-5;
+		}
+
+
+	};	
+
+	function drawShip() {
+		c.strokeStyle = "#F2F2F2";
+		c.beginPath();
+		c.moveTo(shipX,shipY);
+		c.lineTo(shipX+10, shipY+20);
+		c.lineTo(shipX,shipY+10);
+		c.lineTo(shipX-10, shipY+20);
+		c.lineTo(shipX,shipY);
+		c.stroke();
+		c.closePath();
+	};	
+	
+</script>
+</head>
+<body>
+<canvas id ="myCanvas" width="500" height="500">
+</body>
+</html>
+
+
+
+

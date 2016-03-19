@@ -1,0 +1,362 @@
+<!doctype html> <html>
+<head>
+<title>AstroDodge!</title>
+<script>
+	var WINDOW_WIDTH = 500;
+	var WINDOW_HEIGHT = 500;
+
+	astroX = [];
+	astroY = [];
+	astroV = []; // speed
+
+	var aCount = 0;
+
+	var score = 0;
+	var highScore = 0;
+
+	var shipX = 0;
+	var shipY = 0;
+	
+	var shotY;
+	var shotX;
+	var shotFired = false;
+
+	var leftKeyDown = false;
+	var rightKeyDown = false;	
+
+	var KEY_SPACEBAR = 32;
+	var KEY_LEFTARROW = 37;
+	var KEY_RIGHTARROW = 39;
+
+	var c;
+
+	var MODE_BEGIN = 1;
+	var MODE_PLAY  = 2;
+	var MODE_END   = 3;
+
+	var mode       = MODE_BEGIN;
+
+	var handle     = 0;
+
+	var score      = 0;
+	
+	window.addEventListener("load", eventWindowLoaded, false);
+
+	// 
+	// MAIN LOOP
+	// 
+	function initGame() {
+		astroX = [];
+		astroY = [];
+		astroV = [];
+		shotFired = false;
+		mode = MODE_PLAY;
+		score = 0;
+		shipX = WINDOW_WIDTH / 2;
+		shipY = WINDOW_HEIGHT - 50;
+	};
+
+	function runGame() {
+		handle = setInterval(doGame, 25);
+	};
+
+	function endGame() {
+		if(score>highScore){
+			highScore = score;
+		};
+		mode = MODE_END;
+	}
+
+	function doGame() {
+		if (mode === MODE_PLAY) {
+			// if it's time, create an asteroid
+			if (aCount === 20) {
+				createAsteroid();
+				console.log('how many asteroids? ' + astroX.length)
+				aCount = 0;
+			}
+			aCount++;
+
+			// update
+			updateShip();
+			updateAsteroid();
+			updateShot();
+
+			// check for collisions
+			checkStuff();
+
+			// draw
+			drawBackground();
+			drawScore();
+			drawShip();
+			drawAsteroid();
+			drawShot();
+		} else if (mode === MODE_END) {
+			endScreen();
+		} else if (mode === MODE_BEGIN) {
+			splashScreen();
+		}
+	};
+
+	function endScreen() {
+		drawBackground();
+		drawScore();
+
+		c.fillStyle    = 'white';
+		c.font         = '20pt Courier';
+		c.textBaseline = 'bottom';
+		c.textAlign    = 'center';
+		c.fillText('game over', WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2);
+	};
+
+	function splashScreen() {
+		drawBackground();
+
+		c.fillStyle    = 'white';
+		c.font         = '20pt Courier';
+		c.textBaseline = 'bottom';
+		c.textAlign    = 'center';
+		c.fillText('press spacebar to play', WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2);
+		c.fillText('highscore: ' + highScore, WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 - 100);
+	};
+
+	// 
+	// INITIALIZE APPLICATION
+	//
+	function eventWindowLoaded () {	
+		var canvas = document = document.getElementById('myCanvas');
+		c = canvas.getContext("2d");
+		runGame();
+	};
+	
+	//
+	// KEY PRESS STUFF
+	// 
+	document.onkeydown = function(e) {
+		// console.log(e.keyCode);
+
+		if (mode === MODE_PLAY) {
+			if (e.keyCode === KEY_RIGHTARROW) {
+				rightKeyDown = true;
+			} else if (e.keyCode === KEY_LEFTARROW) {
+				leftKeyDown = true;
+			} else if (e.keyCode === KEY_SPACEBAR) {
+				if (shotFired === false){
+					createShot();
+				}
+			}
+		} else if (mode === MODE_BEGIN) {
+			if (e.keyCode === KEY_SPACEBAR) {
+				initGame();
+			}
+		} else if (mode === MODE_END) {
+			if (e.keyCode === KEY_SPACEBAR) {
+				mode = MODE_BEGIN;
+			}
+		}
+	};	
+
+	document.onkeyup = function(e) {
+		// console.log(e.keyCode);
+		if (e.keyCode === KEY_RIGHTARROW) {
+			rightKeyDown = false;
+		}
+		if (e.keyCode === KEY_LEFTARROW) {
+			leftKeyDown = false;
+		}
+	};	
+
+	//
+	// CHECK STUFF
+	// 
+	function checkStuff() {
+		//Has the astroid hit you?
+		// ! ( P2.y < P3.y || P1.y > P4.y || P2.x < P3.x || P1.x > P4.x )
+		//Thanks! http://leetcode.com/2011/05/determine-if-two-rectangles-overlap.html
+
+		// p3, p4: ship location
+		var p3x = shipX - 10;
+		var p3y = shipY;
+
+		var p4x = shipX + 10;
+		var p4y = shipY + 20;
+
+		// p5, p6: shot location
+		var p5x = shotX - 1;
+		var p5y = shotY;
+
+		var p6x = shotX + 1;
+		var p6y = shotY + 25;
+
+		// and now asteroids...
+		for (var i = 0; i < astroX.length; i++) {
+			var p1x = astroX[i] - 15;
+			var p1y = astroY[i] - 15;
+
+			var p2x = astroX[i] + 15;
+			var p2y = astroY[i] + 15;
+
+			if (! (p2y < p3y || p1y > p4y || p2x < p3x || p1x > p4x)) {
+				console.log('end game 1');
+				endGame();
+			}
+		}
+
+		if (shotFired === true) {
+			var tmpX = [];
+			var tmpY = [];
+			var tmpV = [];
+			var tmpC = 0;
+
+			for (var i = 0; i < astroX.length; i++) {
+				var p1x = astroX[i] - 15;
+				var p1y = astroY[i] - 15;
+
+				var p2x = astroX[i] + 15;
+				var p2y = astroY[i] + 15;
+
+				if (! (p2y < p5y || p1y > p6y || p2x < p5x || p1x > p6x)) {
+					console.log('hit!');
+					score = score + 1;
+					shotFired = false;
+				} else {
+					tmpX[tmpC] = astroX[i];
+					tmpY[tmpC] = astroY[i];
+					tmpV[tmpC] = astroV[i];
+					tmpC++;
+				}
+			}
+
+			astroX = tmpX;
+			astroY = tmpY;
+			astroV = tmpV;
+		}
+	}
+
+	//
+	// UPDATE STUFF
+	// 
+	function updateAsteroid() {
+		var tmpX = [];
+		var tmpY = [];
+		var tmpV = [];
+		var tmpC = 0;
+		for (var i = 0; i < astroX.length; i++) {
+			astroY[i] = astroY[i] + astroV[i];
+
+			if (astroY[i] > WINDOW_HEIGHT){
+				shipY = shipY - 20;
+				if (shipY < 10){
+					console.log('end game 2');
+					endGame();
+				}
+			} else {
+				tmpX[tmpC] = astroX[i];
+				tmpY[tmpC] = astroY[i];
+				tmpV[tmpC] = astroV[i];
+				tmpC++;
+			}
+		}
+		astroX = tmpX;
+		astroY = tmpY;
+		astroV = tmpV;
+	};
+	
+	function updateShip() {
+		if (leftKeyDown === true && shipX > 25) {
+			shipX = shipX-5;
+		}
+		if (rightKeyDown === true && shipX < (WINDOW_WIDTH - 25)) {
+			shipX = shipX+5;
+		}
+	};
+
+	function updateShot() {
+		if (shotFired === false) {
+			return;
+		}
+		shotY = shotY - 10;
+		if (shotY < 0) {
+			shotFired = false;
+		}
+	};
+
+	//
+	// CREATE STUFF
+	// 
+	function createAsteroid() {
+		astroX[astroX.length] = Math.floor(Math.random()*400+50);
+    	astroY[astroY.length] = -20;
+		astroV[astroV.length] = Math.floor(Math.random()*10) + 1;
+	};
+
+	function createShot() {
+		shotX = shipX;
+		shotY = shipY - 10;
+		shotFired = true;
+	};
+
+	// 
+	// DRAW STUFF
+	// 
+	function drawShip() {
+		c.strokeStyle = "#F2F2F2";
+		c.lineWidth = 1;
+		c.beginPath();
+		c.moveTo(shipX,shipY);
+		c.lineTo(shipX+10, shipY+20);
+		c.lineTo(shipX,shipY+10);
+		c.lineTo(shipX-10, shipY+20);
+		c.lineTo(shipX,shipY);
+		c.stroke();
+		c.closePath();
+	};	
+
+	function drawShot() {
+		if (shotFired === false) {
+			return;
+		}
+		c.strokeStyle = "#00FF00";
+		c.lineWidth = 3;
+		c.beginPath();
+		c.moveTo(shotX,shotY);
+		c.lineTo(shotX,shotY+25);
+		c.stroke();
+		c.closePath();
+	};	
+
+	function drawAsteroid() {
+		for(var i = 0; i < astroX.length; i++){
+      		c.lineWidth = 1;
+			c.fillStyle = '#F2F2F2';
+			var w = 30;
+			var w2 = w / 2.0;
+   			c.fillRect(astroX[i]-w2, astroY[i]-w2, w, w);
+    
+		};		
+	};
+
+	function drawBackground() {
+		c.fillStyle = "#0B0B61";
+		c.fillRect(0,0,500,500);
+	};
+
+	function drawScore(){
+		c.fillStyle    = 'white';
+		c.font         = '20pt Courier';
+		c.textBaseline = 'middle';
+		c.textAlign    = 'left';
+		c.fillText(score, WINDOW_WIDTH - 50, WINDOW_HEIGHT - 50);
+
+	}
+	
+</script>
+</head>
+<body>
+<canvas id ="myCanvas" width="500" height="500">
+</body>
+</html>
+
+
+
+

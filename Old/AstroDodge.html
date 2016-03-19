@@ -1,0 +1,615 @@
+<!doctype html> <html>
+<head>
+<title>AstroDodge!</title>
+<script>
+	var WINDOW_WIDTH = 320;
+	var WINDOW_HEIGHT = 480;
+
+	astroX = [];
+	astroY = [];
+	astroV = []; // speed
+	astroAlpha = [];
+
+	var playRight;
+	var playLeft;
+	var playBottom;
+	var playTop;
+
+	var optionsRight;
+	var optionsLeft;
+	var optionsBottom;
+	var optionsTop;
+
+	const DIFF_EASY  = 5;
+	const DIFF_HARD  = 10;
+	var difficulty   = DIFF_EASY;
+
+	const ASTRO_WIDTH = 10;
+
+	var cheatAim = true;
+
+	var aCount = 0;
+
+	var score = 0;
+	var highScore = 0;
+
+	var shipX = 0;
+	var shipY = 0;
+	
+	var shotY;
+	var shotX;
+	var shotFired = false;
+
+	var leftKeyDown = false;
+	var rightKeyDown = false;	
+
+	const KEY_SPACEBAR   = 32;
+	const KEY_LEFTARROW  = 37;
+	const KEY_RIGHTARROW = 39;
+
+	var c;
+
+	const MODE_INIT    = 0;
+	const MODE_BEGIN   = 1;
+	const MODE_PLAY    = 2;
+	const MODE_END     = 3;
+	const MODE_OPTIONS = 4;
+
+	var mode           = MODE_INIT;
+
+	var timerHandle;   // use to remember interval timer (if you want to turn it off)
+
+	var score  = 0;
+
+	var mouseX = 0;
+	var mouseY = 0;
+
+	var gameOver;
+
+	var laser;
+
+	var laserSound      = [];
+	var numLasers       = 3;
+	var numSoundsLoaded = 0;
+	var soundPool       = [];
+	var MAX_SOUNDS      = 5;
+	var soundBackground;
+	
+	window.addEventListener("load", eventWindowLoaded, false);
+
+	// 
+	// MAIN LOOP
+	// 
+	function initGame() {
+		astroX = [];
+		astroY = [];
+		astroV = [];
+		shotFired = false;
+		mode  = MODE_PLAY;
+		score = 0;
+		shipX = WINDOW_WIDTH / 2;
+		shipY = WINDOW_HEIGHT - 50;
+	};
+
+	function soundLoaded(e) {
+		numSoundsLoaded++;
+		if (numSoundsLoaded >= numLasers) {
+			for (var i = 0; i < numLasers; i++) {
+				laserSound[i].removeEventListener('canplaythrough', soundLoaded, false);
+				soundPool.push({name:'laser', element:laserSound[i], type:'audio/wav', played:false});
+			}
+			mode = MODE_BEGIN;
+		}
+	}
+
+	function playSound(sound, volume) {
+		var soundFound = false;
+		var soundIndex = 0;
+
+		if (soundPool.length > 0) {
+			while (!soundFound && soundIndex < soundPool.length) {
+				var currSound = soundPool[soundIndex];
+				if ((currSound.element.ended || !currSound.played) && currSound.name == sound) {
+					soundFound = true;
+					currSound.played = true;
+				} else {
+					soundIndex++;
+				}
+			}
+		}
+
+		if (soundFound === true) {
+			var tempSound = soundPool[soundIndex].element;
+			tempSound.loop   = false;
+			tempSound.volume = volume;
+			tempSound.play();
+		} else if (soundPool.length < MAX_SOUNDS) {
+			var tempSound = document.createElement('audio');
+			tempSound.setAttribute('src', 'LASER1.WAV');
+			tempSound.volume = volume;
+			tempSound.play();
+			soundPool.push({name:'laser', element:tempSound, type:'audio/wav', played:true});
+		}
+	}
+
+
+	function runGame() {
+		// start loading sounds
+		for (var i = 0; i < numLasers; i++) {
+			laserSound[i] = document.createElement('audio');
+			document.body.appendChild(laserSound[i]);
+			laserSound[i].setAttribute('src', 'LASER1.WAV');
+			laserSound[i].addEventListener('canplaythrough', soundLoaded, false);
+		}
+
+		// set up interval timer
+		timerHandle = setInterval(doGame, 25);
+	};
+
+	function endGame() {
+		soundBackground.pause();
+		soundBackground.currentTime = 0;
+		if(score > highScore){
+			highScore = score;
+		};
+		mode = MODE_END;
+		gameOver = 150;
+	}
+
+	function doGame() {
+		if (mode === MODE_INIT) {
+			loadingScreen();
+			if (numSoundsLoaded >= numLasers) {
+				mode = MODE_BEGIN;
+			}
+		} else if (mode === MODE_PLAY) {
+			// if it's time, create an asteroid
+			if (aCount >= 50) {
+				createAsteroid();
+				console.log('how many asteroids? ' + astroX.length)
+				aCount = 0;
+			}
+			aCount = aCount + score/(25 - difficulty) + 0.5;
+
+			// update
+			updateShip();
+			updateAsteroid();
+			updateShot();
+
+			// check for collisions
+			checkStuff();
+
+			// draw
+			drawBackground();
+			drawScore();
+			drawDifficulty();
+			drawShip();
+			drawAsteroid();
+			drawShot();
+		} else if (mode === MODE_END) {
+			endScreen();
+			gameOver--;
+			if (gameOver < 0) {
+				mode = MODE_BEGIN;
+			}
+		} else if (mode === MODE_BEGIN) {
+			splashScreen();
+		} else if (mode === MODE_OPTIONS) {
+			optionsScreen();
+		}
+	};
+
+	function endScreen() {
+		drawBackground();
+		drawScore();
+		drawDifficulty();
+		doText('game over', WINDOW_WIDTH/2, WINDOW_HEIGHT/2, 'white', '14pt Courier', 'bottom', 'center');
+	}
+
+	function loadingScreen() {
+		drawBackground();
+		doText('loading...', WINDOW_WIDTH/2, WINDOW_HEIGHT/2, 'white', '30pt Courier', 'bottom', 'center');
+	}
+
+	function splashScreen() {
+		drawBackground();
+		drawDifficulty();
+		drawHighscore();
+
+		doText('ASTRO DODGE!', WINDOW_WIDTH/2, WINDOW_HEIGHT/3, 'white', '30pt Courier', 'bottom', 'center');
+
+		// Draw play Button
+		playTop    = WINDOW_HEIGHT/2 - 30;
+		playBottom = WINDOW_HEIGHT/2 + 30;
+		playRight  = WINDOW_WIDTH/2 + 50;
+		playLeft   = WINDOW_WIDTH/2 - 50;
+
+		c.globalAlpha  = 1;
+		c.lineWidth = 1;
+		c.fillStyle = '#00FF00';
+   		c.fillRect(playLeft, playTop, playRight - playLeft, playBottom - playTop);
+   		doText('PLAY', WINDOW_WIDTH/2, WINDOW_HEIGHT/2, 'black', '28pt Courier', 'middle', 'center');
+
+		// Draw Options Button
+		optionsTop    = WINDOW_HEIGHT/1.5 - 30;
+		optionsBottom = WINDOW_HEIGHT/1.5 + 30;
+		optionsRight  = WINDOW_WIDTH/2 + 50;
+		optionsLeft   = WINDOW_WIDTH/2 - 50;
+
+		c.globalAlpha  = 1;
+		c.lineWidth = 1;
+		c.fillStyle = '#00FF00';
+   		c.fillRect(optionsLeft, optionsTop, optionsRight - optionsLeft, optionsBottom - optionsTop);
+   		doText('Options', WINDOW_WIDTH/2, WINDOW_HEIGHT/1.5, 'black', '14pt Courier', 'middle', 'center');
+	}
+
+	function optionsScreen() {
+		drawBackground();
+		drawDifficulty();
+		drawHighscore();
+
+		c.globalAlpha  = 1;
+		c.fillStyle    = 'white';
+		c.font         = '30pt Courier';
+		c.textBaseline = 'bottom';
+		c.textAlign    = 'center';
+		c.fillText('OPTIONS', WINDOW_WIDTH / 2, WINDOW_HEIGHT / 3);
+
+
+		//Draw EASY Button
+		c.globalAlpha  = 1;
+		c.lineWidth = 1;
+		c.fillStyle = '#00FF00';
+   		c.fillRect(WINDOW_WIDTH/2-50, WINDOW_HEIGHT/2-30, 100, 60);
+
+   		c.fillStyle    = 'black';
+		c.font         = '28pt Courier';
+		c.textBaseline = 'middle';
+		c.textAlign    = 'center';
+		c.fillText('EASY', WINDOW_WIDTH / 2, WINDOW_HEIGHT/2);
+
+		// why call anyone a jerk? BECUASE ME ANGRY! >:(
+
+		//Draw HARD Button
+
+		c.lineWidth = 1;
+		c.fillStyle = '#00FF00';
+   		c.fillRect(WINDOW_WIDTH/2-50, WINDOW_HEIGHT/1.5-30, 100, 60);
+
+   		c.fillStyle    = 'black';
+		c.font         = '28pt Courier';
+		c.textBaseline = 'middle';
+		c.textAlign    = 'center';
+		c.fillText('HARD', WINDOW_WIDTH / 2, WINDOW_HEIGHT/1.5);
+	}
+
+	// 
+	// INITIALIZE APPLICATION
+	//
+	function eventWindowLoaded () {	
+		var canvas = document.getElementById('myCanvas');
+		c = canvas.getContext("2d");
+		//laser = document.getElementByID("laser");
+		//laser = new Audio("LASER1.WAV");
+		canvas.addEventListener("mousedown", doMouseDown,false);
+		runGame();
+	}
+	
+	//
+	// KEY PRESS STUFF
+	// 
+	
+	function doMouseDown(event) {
+
+		 mouseX = event.pageX;
+		 mouseY = event.pageY;
+
+		 console.log('mouse event ' + mouseX + ',' + mouseY);
+		 console.log('mode is ' + mode);
+		 if (mode === MODE_BEGIN){
+		 	if (mouseX < playRight && mouseX > playLeft && mouseY < playBottom && mouseY > playTop) {
+		 		console.log("play");
+		 		soundBackground = document.getElementById('bgsound');
+		 		soundBackground.play();
+		 		initGame();
+		 	}
+
+		 	if (mouseX < optionsRight && mouseX > optionsLeft && mouseY < optionsBottom && mouseY > optionsTop) {
+		 		console.log("options");
+		 		mode = MODE_OPTIONS;
+		 	}
+		 } else if (mode === MODE_OPTIONS){
+		 	if (mouseX < playRight && mouseX > playLeft && mouseY < playBottom && mouseY > playTop){
+		 		console.log("easy");
+		 		difficulty = DIFF_EASY;
+		 		mode = MODE_BEGIN;
+		 	}
+		 	console.log(mouseX+','+mouseY+','+optionsRight+','+optionsLeft+','+optionsBottom+','+optionsTop);
+		 	if (mouseX < optionsRight && mouseX > optionsLeft && mouseY < optionsBottom && mouseY > optionsTop){
+		 		console.log("hard");
+		 		difficulty = DIFF_HARD;
+		 		mode = MODE_BEGIN;
+		 	}
+		 }
+	}
+
+	document.onkeydown = function(e) {
+		// console.log(e.keyCode);
+
+		if (mode === MODE_PLAY) {
+			if (e.keyCode === KEY_RIGHTARROW) {
+				rightKeyDown = true;
+			} else if (e.keyCode === KEY_LEFTARROW) {
+				leftKeyDown = true;
+			} else if (e.keyCode === KEY_SPACEBAR) {
+				if (shotFired === false){
+					playSound('laser', 1);
+					createShot();
+				}
+			}
+		} else if (mode === MODE_BEGIN) {
+			if (e.keyCode === KEY_SPACEBAR) {
+				initGame();
+			}
+		} else if (mode === MODE_END) {
+			if (e.keyCode === KEY_SPACEBAR) {
+				mode = MODE_BEGIN;
+			}
+		}
+	};	
+
+	document.onkeyup = function(e) {
+		// console.log(e.keyCode);
+		if (e.keyCode === KEY_RIGHTARROW) {
+			rightKeyDown = false;
+		}
+		if (e.keyCode === KEY_LEFTARROW) {
+			leftKeyDown = false;
+		}
+	};	
+
+	//
+	// CHECK STUFF
+	// 
+	function checkStuff() {
+		//Has the astroid hit you?
+		// ! ( P2.y < P3.y || P1.y > P4.y || P2.x < P3.x || P1.x > P4.x )
+		//Thanks! http://leetcode.com/2011/05/determine-if-two-rectangles-overlap.html
+
+		// p3, p4: ship location
+		var p3x = shipX - 10;
+		var p3y = shipY;
+
+		var p4x = shipX + 10;
+		var p4y = shipY + 20;
+
+		// p5, p6: shot location
+		var p5x = shotX - 1;
+		var p5y = shotY;
+
+		var p6x = shotX + 1;
+		var p6y = shotY + 25;
+
+		// and now asteroids...
+		for (var i = 0; i < astroX.length; i++) {
+			var p1x = astroX[i] - ASTRO_WIDTH;
+			var p1y = astroY[i] - ASTRO_WIDTH;
+
+			var p2x = astroX[i] + ASTRO_WIDTH;
+			var p2y = astroY[i] + ASTRO_WIDTH;
+
+			if (! (p2y < p3y || p1y > p4y || p2x < p3x || p1x > p4x)) {
+				console.log('end game 1');
+				endGame();
+			}
+		}
+
+		if (shotFired === true) {
+			var tmpX = [];
+			var tmpY = [];
+			var tmpV = [];
+			var tmpC = 0;
+
+			for (var i = 0; i < astroX.length; i++) {
+				var p1x = astroX[i] - ASTRO_WIDTH;
+				var p1y = astroY[i] - ASTRO_WIDTH;
+
+				var p2x = astroX[i] + ASTRO_WIDTH;
+				var p2y = astroY[i] + ASTRO_WIDTH;
+
+				if (! (p2y < p5y || p1y > p6y || p2x < p5x || p1x > p6x)) {
+					console.log('hit!');
+					score = score + (difficulty/5);
+					shotFired = false;
+				} else {
+					tmpX[tmpC] = astroX[i];
+					tmpY[tmpC] = astroY[i];
+					tmpV[tmpC] = astroV[i];
+					tmpC++;
+				}
+			}
+
+			astroX = tmpX;
+			astroY = tmpY;
+			astroV = tmpV;
+		}
+	}
+
+	//
+	// UPDATE STUFF
+	// 
+	function updateAsteroid() {
+		var tmpX = [];
+		var tmpY = [];
+		var tmpV = [];
+		var tmpC = 0;
+		for (var i = 0; i < astroX.length; i++) {
+			astroY[i] = astroY[i] + astroV[i];
+
+			if (astroY[i] > WINDOW_HEIGHT){
+				shipY = shipY - 20;
+				if (shipY < 10){
+					console.log('end game 2');
+					endGame();
+				}
+			} else {
+				tmpX[tmpC] = astroX[i];
+				tmpY[tmpC] = astroY[i];
+				tmpV[tmpC] = astroV[i];
+				tmpC++;
+			}
+		}
+		astroX = tmpX;
+		astroY = tmpY;
+		astroV = tmpV;
+	}
+	
+	function updateShip() {
+		if (leftKeyDown === true && shipX > 10) {
+			shipX = shipX-5;
+		}
+		if (rightKeyDown === true && shipX < (WINDOW_WIDTH - 10)) {
+			shipX = shipX+5;
+		}
+	}
+
+	function updateShot() {
+		if (shotFired === false) {
+			return;
+		}
+		shotY = shotY - 12;
+		if (shotY < 0) {
+			shotFired = false;
+		}
+	}
+
+	//
+	// CREATE STUFF
+	// 
+	function createAsteroid() {
+		astroX[astroX.length] = Math.floor(Math.random()*(WINDOW_WIDTH-30))+10;
+    	astroY[astroY.length] = -20;
+    	astroAlpha[astroAlpha.length] = 1;
+    	var speed = Math.floor(Math.random()*(score/3) + 1) + 1;
+    	if (speed > difficulty) {
+    		speed = difficulty;
+    	}
+		astroV[astroV.length] = speed;
+	}
+
+	function createShot() {
+		shotX = shipX;
+		shotY = shipY - 10;
+		shotFired = true;
+	}
+
+	// 
+	// DRAW STUFF
+	// 
+	function drawShip() {
+		c.globalAlpha  = 1;
+		c.setLineDash([1,0]);
+		c.strokeStyle = "#F2F2F2";
+		c.lineWidth = 1;
+		c.beginPath();
+		c.moveTo(shipX,shipY);
+		c.lineTo(shipX+10, shipY+20);
+		c.lineTo(shipX,shipY+10);
+		c.lineTo(shipX-10, shipY+20);
+		c.lineTo(shipX,shipY);
+		c.stroke();
+		c.closePath();
+
+		if (cheatAim === true) {
+			c.setLineDash([2,2]);
+			c.beginPath();
+			c.moveTo(shipX,shipY);
+			c.lineTo(shipX, 0);
+			c.stroke();
+			c.closePath();
+		}
+	}
+
+	function drawShot() {
+		if (shotFired === false) {
+			return;
+		}
+		c.globalAlpha  = 1;
+		c.setLineDash([1,0]);
+		c.strokeStyle = "#00FF00";
+		c.lineWidth = 3;
+		c.beginPath();
+		c.moveTo(shotX,shotY);
+		c.lineTo(shotX,shotY+25);
+		c.stroke();
+		c.closePath();
+	}
+
+	function drawAsteroid() {
+		for(var i = 0; i < astroX.length; i++){
+      		c.lineWidth = 1;
+			c.fillStyle = '#F2F2F2';
+			var w1 = ASTRO_WIDTH + ASTRO_WIDTH;
+			c.globalAlpha  = astroAlpha[i];
+   			c.fillRect(astroX[i]-ASTRO_WIDTH, astroY[i]-ASTRO_WIDTH, w1, w1);
+		}
+	}
+
+	function drawBackground() {
+		c.globalAlpha  = 1;
+		c.fillStyle = "#0B0B61";
+		c.fillRect(0,0,WINDOW_WIDTH,WINDOW_HEIGHT);
+	}
+
+	function doText(str, x, y, color, font, baseline, align) {
+		c.globalAlpha  = 1;
+		c.fillStyle    = color;
+		c.font         = font;
+		c.textBaseline = baseline;
+		c.textAlign    = align;
+		c.fillText(str, x, y);
+
+	}
+
+	function drawScore() {
+		if (score > highScore) {
+			var str = 'new high ' + score;
+			var clr = '#00ff00';
+		} else {
+			var str = score;
+			var clr = 'white';
+		}
+		doText(str, WINDOW_WIDTH - 10, WINDOW_HEIGHT - 10, clr, '12pt Courier', 'middle', 'right');
+	}
+	  
+	function drawDifficulty() {
+		if (difficulty === DIFF_EASY) {
+			var str = 'easy';
+		} else {
+			var str = 'hard';
+		}
+		doText(str, 10, WINDOW_HEIGHT - 10, 'white', '12pt Courier', 'middle', 'left');		
+	}
+
+	function drawHighscore() {
+		doText('high ' + highScore, WINDOW_WIDTH - 10, WINDOW_HEIGHT - 10, '#00ff00', '12pt Courier', 'middle', 'right');		
+	}
+
+	  // <audio src="LASER1.WAV" controls autoplay loop>
+	
+</script>
+</head>
+<body>
+
+<audio id="bgsound" preload="auto" loop='true'>
+	<source src="dogma.mp3" type="audio/mp3">
+</audio>
+
+<canvas id ="myCanvas" width="320" height="480">
+
+</body>
+</html>
+
+
+
+
